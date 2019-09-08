@@ -6,6 +6,7 @@ using System.Windows.Xps.Packaging;
 using System.Windows.Documents;
 using System.Threading;
 using PdfForgeComWrapper.Settings;
+using System.Windows.Controls;
 
 namespace PdfForgeComWrapper
 {
@@ -46,14 +47,61 @@ namespace PdfForgeComWrapper
     }
 
     /// <summary>
+    /// Copies the Creator, Keywords, Subject and Title from the XPS document
+    /// </summary>
+    /// <param name="xpsDocument"></param>
+    public void CopyMetadata(XpsDocument xpsDocument)
+    {
+      if (ReferenceEquals(Settings, null))
+        Settings = new PdfCreatorWrapperSettings();
+      if (ReferenceEquals(Settings.PdfCreatorSettings, null))
+        Settings.PdfCreatorSettings = new PdfCreatorSettings();
+
+      Settings.PdfCreatorSettings.AuthorTemplate = xpsDocument.CoreDocumentProperties.Creator;
+      Settings.PdfCreatorSettings.KeywordTemplate = xpsDocument.CoreDocumentProperties.Keywords;
+      Settings.PdfCreatorSettings.SubjectTemplate = xpsDocument.CoreDocumentProperties.Subject;
+      Settings.PdfCreatorSettings.TitleTemplate = xpsDocument.CoreDocumentProperties.Title;
+    }
+    
+    /// <summary>
     /// Creates a PDF file from the XPS Document by printing it to the PdfCreator printer and saving it with the specified name
-    /// If the destination file already exists it is renamed for backup.
     /// </summary>
     /// <param name="xpsDocument">Xps Document</param>
     /// <param name="destPdfFilePath">The destination path and filename of the generated PDF file.</param>
     /// <param name="blocking">When true, will wait until the file is fully processed and written, when false will return as soon as the conversion job is running.</param>
     /// <returns>True if the job is finished and successfull. (When not blocking true if the job started)</returns>
     public bool CreatePdf(XpsDocument xpsDocument, string destPdfFilePath, bool blocking = true)
+    {
+      return CreatePdf(destPdfFilePath, blocking, new Action<PrintQueue>(pq =>
+        {
+          XpsDocumentWriter printWriter = PrintQueue.CreateXpsDocumentWriter(pq);
+          PrintTicket pt = new PrintTicket();
+          AppyPrintTicketSettings(pt);
+          FixedDocumentSequence fds = xpsDocument.GetFixedDocumentSequence();
+          printWriter.Write(fds, pt); // Do the actual printing
+          pq.Commit();
+        }));
+    }
+
+    /// <summary>
+    /// Creates a PDF file from the Document Paginator by printing it to the PdfCreator printer and saving it with the specified name
+    /// </summary>
+    /// <param name="paginator">The Document Paginater that should be printed</param>
+    /// <param name="destPdfFilePath">The destination path and filename of the generated PDF file.</param>
+    /// <param name="blocking">When true, will wait until the file is fully processed and written, when false will return as soon as the conversion job is running.</param>
+    /// <returns>True if the job is finished and successfull. (When not blocking true if the job started)</returns>
+    public bool CreatePdf(DocumentPaginator paginator, string destPdfFilePath, bool blocking = true)
+    {
+      return CreatePdf(destPdfFilePath, blocking, new Action<PrintQueue>(pq =>
+      {
+        PrintDialog printDialog = new PrintDialog();
+        printDialog.PrintQueue = pq;
+        AppyPrintTicketSettings(printDialog.PrintTicket);
+        printDialog.PrintDocument(paginator, UniquePrintJobName);
+      }));
+    }
+
+    private bool CreatePdf(string destPdfFilePath, bool blocking, Action<PrintQueue> doPrint)
     {
       Queue pdfQueue = new Queue();
       string backup = null;
@@ -78,12 +126,7 @@ namespace PdfForgeComWrapper
         {
           pq.CurrentJobSettings.Description = UniquePrintJobName;
 
-          XpsDocumentWriter printWriter = PrintQueue.CreateXpsDocumentWriter(pq);
-          PrintTicket pt = CreatePrintTicket();
-
-          FixedDocumentSequence fds = xpsDocument.GetFixedDocumentSequence();
-          printWriter.Write(fds, pt); // Do the actual printing
-          pq.Commit();
+          doPrint(pq);
         }
 
         PrintJob job;
@@ -156,21 +199,15 @@ namespace PdfForgeComWrapper
       return backup;
     }
 
-    private PrintTicket CreatePrintTicket()
+    private void AppyPrintTicketSettings(PrintTicket pt)
     {
-      PrintTicket pt = new PrintTicket
-      {
-        OutputQuality = Settings.PrinterSettings.OutputQuality,
-        PageBorderless = Settings.PrinterSettings.PageBorderless,
-        PageMediaSize = new PageMediaSize(Settings.PrinterSettings.PaperSizeName, Settings.PrinterSettings.PaperSize.Width, Settings.PrinterSettings.PaperSize.Height),
-        PageMediaType = Settings.PrinterSettings.PageMediaType,
-        PageOrientation = Settings.PrinterSettings.PageOrientation,
-        TrueTypeFontMode = TrueTypeFontMode.DownloadAsNativeTrueTypeFont
-      };
-      return pt;
+      pt.OutputQuality = Settings.PrinterSettings.OutputQuality;
+      pt.PageBorderless = Settings.PrinterSettings.PageBorderless;
+      pt.PageMediaSize = new PageMediaSize(Settings.PrinterSettings.PaperSizeName, Settings.PrinterSettings.PaperSize.Width, Settings.PrinterSettings.PaperSize.Height);
+      pt.PageMediaType = Settings.PrinterSettings.PageMediaType;
+      pt.PageOrientation = Settings.PrinterSettings.PageOrientation;
+      pt.TrueTypeFontMode = TrueTypeFontMode.DownloadAsNativeTrueTypeFont;
     }
-
-    
 
     private SettingsLogs ApplyPdfForgeSettings(PrintJob job)
     {
@@ -195,7 +232,7 @@ namespace PdfForgeComWrapper
       }
 
       if (!ReferenceEquals(Settings.PdfCreatorSettings, null))
-      {
+      {        
         return Settings.PdfCreatorSettings.Apply(job);
       }
       return new SettingsLogs();
