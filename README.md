@@ -57,4 +57,10 @@ private void Generate(XpsDocument printDocument, string filename){
 
 Note that if you leave settings default it is better to leave them NULL. Every key-value setting needs a COM communication round-trip. Leaving unused settings alone will potentially improve some (minor) performance.
 
+### Note
+I don't think this library is suited for use in a web application. I think that the COM components are using Windows or Forms in the background (even though they may not be visible). Besides, I would advise you to make a singleton PdfCreatorComWrapper and queue your documents. The lib will give each print job a unique name (using a GUID) and apply the correct settings to the correct job. But I have not tested anything in a multithreaded environment and have a gut feeling that stuff might get mixed up.
 
+# Personal notes
+I personally consider this an ugly workaround for not having any component that can directly generate a PDF file from an XpsDocument or even better directly from a `System.Windows.Documents.DocumentPaginator` (it would be better to bypass XPS alltogether).
+
+The results I get from PdfCreator are usually ok, but not outstanding, I'm still looking for a better (affordable) solution. There are a few commercial libs but they all cost $2000 to $4000. A bit much for my hobby project. I have spent allot of time trying to get the PdfSharp to render my pages, but ran into too many bugs.
