@@ -18,6 +18,10 @@ private void Generate(XpsDocument printDocument, string filename){
   PdfForge.CreatePdf(printDocument, filename);
 }
 ```
+Or skip XPS alltogether and use the Document Paginator:
+```C#
+new PdfCreatorComWrapper().CreatePdf(DocumentPaginator, filename);
+```
 
 To change any settings just explore the PdfCreatorComWrapper's `Settings` object.
 
